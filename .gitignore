@@ -57,3 +57,6 @@ ffmpeg2pass-0.log.mbtree
 .env.*
 secrets.json
 config.json
+
+# 🟢 Pre-commit configuration
+.pre-commit-config.yaml
