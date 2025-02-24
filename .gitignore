@@ -1,14 +1,59 @@
-# Byte-compiled / optimized / DLL files
+# 🟢 Python cache and environment
 __pycache__/
 *.py[cod]
+*.pyo
+*.egg-info/
+.Python
+.vscode/
 
-# Virtual Environment
-venv/
+# 🟢 Virtual environment
+.venv/
 
-# Build artifacts
-build/
+# 🟢 Logs and debug output
 *.log
-*.mbtree
+debug.log
+*.out
 
-# FFmpeg artifacts
-ffmpeg2pass-0.log*
+# 🟢 OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 🟢 Python packaging
+build/
+dist/
+*.whl
+
+# 🟢 IDE-specific
+.idea/
+*.iml
+
+# 🟢 Ignore TEST files
+*TEST*
+*test*
+*TEST.py
+*test.py
+
+# 🟢 Test artifacts and coverage
+htmlcov/
+.coverage
+.cache/
+.nox/
+
+# 🟢 Media and output files
+clips/
+output/
+*.mp4
+*.avi
+*.mkv
+
+# 🟢 ffmpeg-related artifacts
+ffmpeg_bin/
+ffmpeg2pass-0.log
+ffmpeg2pass-0.log.mbtree
+
+# 🟢 Environment and secrets
+.env
+.env.*
+secrets.json
+config.json

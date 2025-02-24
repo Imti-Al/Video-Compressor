@@ -1,12 +1,13 @@
 import os
 import subprocess
-from src.helpers import get_video_duration, calculate_bitrate
+from src.helpers import get_video_duration, calculate_bitrate, detect_gpu_encoders, get_audio_bitrate
 
 
 def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_two_pass=True, codec="h265"):
     """
     Compress a video to a target size using FFMPEG.
     Supports GPU acceleration, two-pass encoding, and H.264 or H.265 selection.
+    Includes audio compression by dynamically adjusting bitrate allocation.
     """
     ffmpeg_path = "ffmpeg_bin/ffmpeg.exe"
 
@@ -16,8 +17,14 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
         print("Unable to fetch video duration. Exiting.")
         return
 
-    # Calculate video bitrate based on target size and duration
-    video_bitrate_kbps = calculate_bitrate(target_size_mb - 0.5, duration)  # Adjust for container overhead
+    # Get the audio bitrate
+    audio_bitrate_kbps = get_audio_bitrate(input_path)
+    if audio_bitrate_kbps is None:
+        print("Unable to fetch audio bitrate. Defaulting to 128 kbps.")
+        audio_bitrate_kbps = 128
+
+    # Calculate video bitrate kbps
+    video_bitrate_kbps = calculate_bitrate(target_size_mb - 0.5, duration, audio_bitrate_kbps=audio_bitrate_kbps)
 
     # Detect GPU encoders
     gpu_encoder = None
@@ -58,7 +65,8 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
             "-maxrate", f"{int(video_bitrate_kbps * 1.5)}k",  # Set max bitrate
             "-bufsize", f"{int(video_bitrate_kbps * 2)}k",  # Set buffer size
             "-preset", "p6",  # High-quality preset for NVIDIA
-            "-c:a", "aac", # Audio codec
+            "-c:a", "aac",  # Audio codec
+            "-b:a", f"{audio_bitrate_kbps}k",  # Target audio bitrate
             "-y",
             output_path,
         ]
@@ -72,6 +80,7 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
             "-b:v", f"{video_bitrate_kbps}k",  # Target bitrate for better control
             "-preset", "quality",  # AMD-specific preset
             "-c:a", "aac",
+            "-b:a", f"{audio_bitrate_kbps}k",
             "-y",
             output_path,
         ]
@@ -85,8 +94,8 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
                 "-c:v", encoder,
                 "-preset", "balanced",  # Intel-specific preset
                 "-pass", "1",
-                "-an", # Disables audio encoding for first pass, reducing overhead
-                "-f", "null", # Ensures not saved as file
+                "-an",  # Disable audio in first pass
+                "-f", "null",  # Ensures not saved as file
                 "NUL" if os.name == "nt" else "/dev/null",
             ]
 
@@ -98,6 +107,7 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
                 "-preset", "balanced",
                 "-pass", "2",
                 "-c:a", "aac",
+                "-b:a", f"{audio_bitrate_kbps}k",
                 "-y",
                 output_path,
             ]
@@ -112,7 +122,7 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
                 print(f"Compressed {input_path} to {output_path} successfully with two-pass encoding.")
             except subprocess.CalledProcessError as e:
                 print(f"Error during two-pass compression: {e}")
-            return  # Exit after two-pass encoding
+            return
     elif use_two_pass:
         # Two-pass encoding for CPU or fallback scenarios
         cmd_pass_1 = [
@@ -135,6 +145,7 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
             "-preset", "medium",
             "-pass", "2",
             "-c:a", "aac",
+            "-b:a", f"{audio_bitrate_kbps}k",
             "-y",
             output_path,
         ]
@@ -159,6 +170,7 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
             "-c:v", encoder,
             "-preset", "medium",
             "-c:a", "aac",
+            "-b:a", f"{audio_bitrate_kbps}k",
             "-y",
             output_path,
         ]
@@ -169,29 +181,3 @@ def compress_video(input_path, output_path, target_size_mb, use_gpu=True, use_tw
         print(f"Compressed {input_path} to {output_path} successfully.")
     except subprocess.CalledProcessError as e:
         print(f"Error during compression: {e}")
-
-
-def detect_gpu_encoders(ffmpeg_path):
-    """
-    Detect available GPU encoders from FFMPEG.
-    :return: List of supported GPU encoders.
-    """
-    try:
-        cmd = [ffmpeg_path, "-hide_banner", "-encoders"]
-        output = subprocess.check_output(cmd, universal_newlines=True)
-        encoders = []
-        if "h264_nvenc" in output:
-            encoders.append("h264_nvenc")
-        if "hevc_nvenc" in output:
-            encoders.append("hevc_nvenc")
-        if "h264_amf" in output:
-            encoders.append("h264_amf")
-        if "hevc_amf" in output:
-            encoders.append("hevc_amf")
-        if "h264_qsv" in output:
-            encoders.append("h264_qsv")
-        if "hevc_qsv" in output:
-            encoders.append("hevc_qsv")
-        return encoders
-    except subprocess.CalledProcessError:
-        return []
